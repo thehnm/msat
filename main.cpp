@@ -3,85 +3,213 @@
 #include <string>
 #include <cstring>
 #include <vector>
+#include <stack>
+#include <map>
 
-int64_t convertCStringToInt(const char *literal)
+/**
+ * Main idea used from https://sahandsaba.com/understanding-sat-by-implementing-a-simple-sat-solver-in-python.html
+ */
+
+const uint8_t BOOLEAN_VALUES[2] = {0, 1};
+
+static bool eagerMatch(char *&line, const char *str)
 {
-    int x = 0;
-    bool neg = false;
-    if (*literal == '-')
+    for (; *str != '\0'; ++str, ++line)
     {
-        neg = true;
-        ++literal;
+        if (*str != *line)
+            return false;
     }
-    while (*literal >= '0' && *literal <= '9')
-    {
-        x = (x * 10) + (*literal - '0');
-        ++literal;
-    }
-    if (neg)
-    {
-        x = -x;
-    }
-    return x;
+    return true;
 }
 
-void readCNFFile(std::vector<std::vector<int64_t>> &clause, std::string filename)
+/**
+ * @brief 
+ * 
+ * @param line 
+ */
+static void skipWhiteSpace(char *&line)
+{
+    while ((*line <= '13' && *line > '9') || *line == '32')
+        ++line;
+}
+
+/**
+ * @brief Get the Int object
+ * 
+ * @param line 
+ * @return int64_t 
+ */
+static int64_t getInt(char *&line)
+{
+    skipWhiteSpace(line);
+    int x = 0;
+    bool neg = false;
+    if (*line == '-')
+        neg = true, ++line;
+    while (*line >= '0' && *line <= '9')
+        x = (x * 10) + (*line - '0'), ++line;
+    return neg ? -x : x;
+}
+
+bool readCNFFile(std::string filename, std::vector<std::vector<uint64_t>> &clauses, uint64_t &numvars)
 {
     std::string line;
     std::ifstream myfile;
     myfile.open(filename);
-    std::vector<int64_t> bufferClause;
+    std::vector<uint64_t> bufferClause;
     char *token;
+
+    int64_t numberOfClauses;
+    int64_t numberOfVariables;
 
     while (std::getline(myfile, line))
     {
         if (line[0] == 'c')
-        {
             continue;
-        }
 
-        char cLine[line.size() + 1];
+        char *cLine = new char[line.size() + 1];
         std::strncpy(cLine, line.c_str(), line.size());
         cLine[line.size()] = '\0';
+        uint64_t clauseCounter = 0;
 
         // Read header
         if (cLine[0] == 'p')
         {
+            if (!eagerMatch(cLine, "p cnf"))
+            {
+                std::cout << "Wrong header format" << std::endl;
+                exit(1);
+            }
+            else
+            {
+                numvars = getInt(cLine);
+            }
+
             std::cout << "Header read." << std::endl;
+            delete cLine;
             continue;
         }
 
         // Read clauses
-        token = std::strtok(cLine, " ");
-        while (token != NULL)
+        while (cLine != NULL)
         {
-            int64_t lit = convertCStringToInt(token);
+            uint8_t neg = 0;
+            int64_t lit = getInt(cLine);
             if (lit == 0)
+                break;
+            if (lit < 0)
+                neg = 1;
+            bufferClause.push_back((lit << 1) | neg);
+        }
+        clauses.push_back(bufferClause);
+        bufferClause.clear();
+        delete cLine;
+    }
+    return 0;
+}
+
+std::map<uint64_t, std::vector<std::vector<uint64_t> *>> setup_watchlist(std::vector<std::vector<uint64_t>> &clauses)
+{
+    std::map<uint64_t, std::vector<std::vector<uint64_t> *>> watchlist;
+    for (std::vector<uint64_t> clause : clauses)
+    {
+        std::vector<uint64_t> *clausePointer = &clause;
+        watchlist[clause[0]].push_back(clausePointer);
+    }
+
+    return watchlist;
+}
+
+bool updateWatchlist(std::map<uint64_t, std::vector<std::vector<uint64_t> *>> &watchlist,
+                     uint64_t false_literal,
+                     std::vector<uint8_t> &assignment)
+{
+    while (watchlist[false_literal].size() > 0)
+    {
+        std::vector<uint64_t> *pclause = watchlist[false_literal].back();
+        bool found_alt = false;
+        for (uint64_t alt_lit : *(pclause))
+        {
+            uint64_t real_var = alt_lit >> 1;
+            uint16_t odd = alt_lit & 1;
+            if (assignment[real_var] == -1 || assignment[real_var] == odd ^ 1)
             {
+                found_alt = true;
+                watchlist[false_literal].pop_back();
+                watchlist[alt_lit].push_back(pclause);
                 break;
             }
-
-            bufferClause.push_back(lit);
-            token = strtok(NULL, " ");
         }
-        clause.push_back(bufferClause);
-        bufferClause.clear();
+
+        if (!found_alt)
+            return false;
+    }
+
+    return true;
+}
+
+bool solve(std::map<uint64_t, std::vector<std::vector<uint64_t> *>> &watchlist,
+           std::vector<uint8_t> &assignment,
+           uint64_t d)
+{
+    uint64_t n = assignment.size();
+    uint64_t state[n];
+    for (int i = 0; i < n; i++)
+        state[i] = 0;
+
+    while (1)
+    {
+        if (d = n)
+            return true;
+        bool tried = false;
+        for (uint8_t a : BOOLEAN_VALUES)
+        {
+            if ((state[d] >> a) & 1 == 0)
+            {
+                tried = true;
+                state[d] = (state[d] | 1) << a;
+                assignment[d] = a;
+                if (!updateWatchlist(watchlist, (d << 1) | a, assignment))
+                    assignment[d] = -1;
+                else
+                {
+                    d++;
+                    break;
+                }
+            }
+        }
+
+        if (!tried)
+        {
+            if (d == 0)
+                return false;
+            else
+            {
+                state[d] = 0;
+                assignment[d] = -1;
+                d--;
+            }
+        }
     }
 }
 
 int main(int argc, char **argv)
 {
-    std::vector<std::vector<int64_t>> clauses;
-    std::vector<int64_t> variables;
-
-    readCNFFile(clauses, argv[1]);
-    for (std::vector<int64_t> c : clauses)
+    std::vector<std::vector<uint64_t>> clauses;
+    std::vector<uint8_t> assignment;
+    uint64_t numvars;
+    readCNFFile(argv[1], clauses, numvars);
+    for (uint64_t i = 0; i < numvars + 1; i++)
+        assignment.push_back(-1);
+    std::map<uint64_t, std::vector<std::vector<uint64_t> *>> watchlist = setup_watchlist(clauses);
+    if (solve(watchlist, assignment, 1))
     {
-        for (int64_t l : c)
-        {
-            std::cout << l << " ";
-        }
-        std::cout << std::endl;
+        std::cout << "SATISFIABLE" << std::endl;
+        return 0;
     }
-    return 0;
+    else
+    {
+        std::cout << "UNSATISFIABLE" << std::endl;
+        return 1;
+    }
 }
