@@ -6,12 +6,27 @@
 #include <stack>
 #include <map>
 
+typedef std::vector<uint64_t>* pvec;
+typedef std::vector<uint64_t> vec;
+typedef std::vector<pvec> clause_database;
+typedef std::vector<std::vector<pvec>> watchlist_vec;
+
 /**
  * Main idea used from https://sahandsaba.com/understanding-sat-by-implementing-a-simple-sat-solver-in-python.html
  */
 
 const uint8_t BOOLEAN_VALUES[2] = {0, 1};
 
+// Utility functions
+
+/**
+ * @brief 
+ * 
+ * @param line 
+ * @param str 
+ * @return true 
+ * @return false 
+ */
 static bool eagerMatch(char *&line, const char *str)
 {
     for (; *str != '\0'; ++str, ++line)
@@ -51,7 +66,18 @@ static int64_t getInt(char *&line)
     return neg ? -x : x;
 }
 
-bool readCNFFile(std::string filename, std::vector<std::vector<uint64_t>> &clauses, uint64_t &numvars)
+// SAT Solver
+
+/**
+ * @brief 
+ * 
+ * @param filename 
+ * @param clauses 
+ * @param numvars 
+ * @return true 
+ * @return false 
+ */
+bool readCNFFile(std::string filename, clause_database &clauses, uint64_t &numvars, uint64_t &numclauses)
 {
     std::string line;
     std::ifstream myfile;
@@ -77,14 +103,15 @@ bool readCNFFile(std::string filename, std::vector<std::vector<uint64_t>> &claus
             if (eagerMatch(cLine, "p cnf"))
             {
                 numvars = getInt(cLine);
+                std::cout << "c Number of variables: " << numvars << std::endl;
+                numclauses = getInt(cLine);
+                std::cout << "c Number of clauses: " << numclauses << std::endl;
             }
             else
             {
                 std::cout << "c Wrong header format!" << std::endl;
                 exit(1);
             }
-
-            std::cout << "c Header read" << std::endl;
             continue;
         }
 
@@ -97,46 +124,64 @@ bool readCNFFile(std::string filename, std::vector<std::vector<uint64_t>> &claus
                 break;
             if (lit < 0) neg = 1;
             uint64_t newLit = (abs(lit) << 1) | neg;
-            std::cout << newLit << " ";
             bufferClause.push_back(newLit);
         }
-        std::cout << std::endl;
-        clauses.push_back(bufferClause);
+
+        clauses.push_back(new vec(bufferClause));
         bufferClause.clear();
     }
     return 0;
 }
 
-std::map<uint64_t, std::vector<std::vector<uint64_t> *>> setup_watchlist(std::vector<std::vector<uint64_t>> &clauses)
+/**
+ * @brief Set the up watchlist object
+ * 
+ * @param numvars 
+ * @param watchlist 
+ * @param clauses 
+ * @return true 
+ * @return false 
+ */
+bool setup_watchlist(uint64_t numvars,
+                     watchlist_vec &watchlist,
+                     clause_database &clauses)
 {
-    std::map<uint64_t, std::vector<std::vector<uint64_t> *>> watchlist;
-    for (std::vector<uint64_t> clause : clauses)
+    for (pvec clause : clauses)
     {
-        for (uint64_t c : clause) std::cout << c << std::endl;
-        std::vector<uint64_t> *clausePointer = &clause;
-        watchlist[clause[0]].push_back(clausePointer);
+        watchlist[clause->at(0)].push_back(clause);
     }
-
-    return watchlist;
+    return true;
 }
 
-bool updateWatchlist(std::map<uint64_t, std::vector<std::vector<uint64_t> *>> &watchlist,
+/**
+ * @brief 
+ * 
+ * @param watchlist 
+ * @param false_literal 
+ * @param assignment 
+ * @return true 
+ * @return false 
+ */
+bool updateWatchlist(watchlist_vec &watchlist,
                      uint64_t false_literal,
-                     std::vector<uint64_t> &assignment)
+                     vec &assignment)
 {
     while (watchlist[false_literal].size() > 0)
     {
-        std::vector<uint64_t> *pclause = watchlist[false_literal].back();
+        pvec pclause = watchlist[false_literal].back();
+
         bool found_alt = false;
-        for (uint64_t alt_lit : *(pclause))
+
+        for (uint64_t i = 0; i < pclause->size(); i++)
         {
-            uint64_t real_var = alt_lit >> 1;
-            uint16_t odd = alt_lit & 1;
-            if (assignment[real_var] == -1 || assignment[real_var] == (odd ^ 1))
+            uint64_t real_var = pclause->at(i) >> 1;
+            uint16_t odd = pclause->at(i) & 1;
+
+            if (assignment[real_var] == 2 || assignment[real_var] == (odd ^ 1))
             {
                 found_alt = true;
                 watchlist[false_literal].pop_back();
-                watchlist[alt_lit].push_back(pclause);
+                watchlist[pclause->at(1)].push_back(pclause);
                 break;
             }
         }
@@ -148,8 +193,17 @@ bool updateWatchlist(std::map<uint64_t, std::vector<std::vector<uint64_t> *>> &w
     return true;
 }
 
-bool solve(std::map<uint64_t, std::vector<std::vector<uint64_t> *>> &watchlist,
-           std::vector<uint64_t> &assignment,
+/**
+ * @brief 
+ * 
+ * @param watchlist 
+ * @param assignment 
+ * @param d 
+ * @return true 
+ * @return false 
+ */
+bool solve(watchlist_vec &watchlist,
+           vec &assignment,
            uint64_t d)
 {
     uint64_t n = assignment.size();
@@ -163,8 +217,7 @@ bool solve(std::map<uint64_t, std::vector<std::vector<uint64_t> *>> &watchlist,
             return true;
         bool tried = false;
         for (uint8_t a : BOOLEAN_VALUES)
-        {   
-            //std::cout << ((state[d] >> a) & 1) << std::endl;
+        {
             if (((state[d] >> a) & 1) == 0)
             {
                 tried = true;
@@ -196,25 +249,50 @@ bool solve(std::map<uint64_t, std::vector<std::vector<uint64_t> *>> &watchlist,
     }
 }
 
+void delete_pointers(clause_database &clauses)
+{
+    for (pvec clause : clauses) delete clause;
+}
+
 int main(int argc, char **argv)
 {
-    std::vector<std::vector<uint64_t>> clauses;
-    std::vector<uint64_t> assignment;
+    std::cout << "c Starting" << std::endl;
+
+    clause_database clauses;
+    vec assignment;
     uint64_t numvars;
-    readCNFFile(argv[1], clauses, numvars);
-    numvars = 2;
+    uint64_t numclauses;
+
+    readCNFFile(argv[1], clauses, numvars, numclauses);
+
+    if (clauses.size() != numclauses)
+    {
+        std::cout << "c ERROR: Number of clauses do not match with number of clauses read!" << std::endl;
+        exit(1);
+    }
+
     for (uint64_t i = 0; i < numvars + 1; i++)
         assignment.push_back(2);
 
-    std::map<uint64_t, std::vector<std::vector<uint64_t> *>> watchlist = setup_watchlist(clauses);
+    watchlist_vec watchlist;
+    for (uint64_t w = 0; w < 2*numvars+1; w++)
+    {
+        watchlist.push_back(std::vector<pvec>());
+    }
+
+    setup_watchlist(numvars, watchlist, clauses);
+    
+    std::cout << "c Start solving" << std::endl;
     if (solve(watchlist, assignment, 1))
     {
         std::cout << "c SATISFIABLE" << std::endl;
+        delete_pointers(clauses);
         return 0;
     }
     else
     {
         std::cout << "c UNSATISFIABLE" << std::endl;
+        delete_pointers(clauses);
         return 1;
     }
 }
