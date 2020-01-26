@@ -3,19 +3,19 @@
 #include <string>
 #include <cstring>
 #include <vector>
-#include <stack>
-#include <map>
 
-typedef std::vector<uint64_t>* pvec;
-typedef std::vector<uint64_t> vec;
-typedef std::vector<pvec> clause_database;
-typedef std::vector<std::vector<pvec>> watchlist_vec;
+using namespace std;
+
+typedef vector<uint64_t> *pvec;
+typedef vector<uint64_t> vec;
+typedef vector<pvec> clause_database;
+typedef vector<vector<pvec>> watchlist_vec;
+
+const uint8_t BOOLEAN_VALUES[2] = {0, 1};
 
 /**
  * Main idea used from https://sahandsaba.com/understanding-sat-by-implementing-a-simple-sat-solver-in-python.html
  */
-
-const uint8_t BOOLEAN_VALUES[2] = {0, 1};
 
 // Utility functions
 
@@ -77,23 +77,23 @@ static int64_t getInt(char *&line)
  * @return true 
  * @return false 
  */
-bool readCNFFile(std::string filename, clause_database &clauses, uint64_t &numvars, uint64_t &numclauses)
+bool readCNFFile(string filename, clause_database &clauses, uint64_t &numvars, uint64_t &numclauses)
 {
-    std::string line;
-    std::ifstream myfile;
+    string line;
+    ifstream myfile;
     myfile.open(filename);
-    std::vector<uint64_t> bufferClause;
+    vector<uint64_t> bufferClause;
 
     int64_t numberOfClauses;
     int64_t numberOfVariables;
 
-    while (std::getline(myfile, line))
+    while (getline(myfile, line))
     {
         if (line[0] == 'c')
             continue;
 
         char *cLine = new char[line.size() + 1];
-        std::strncpy(cLine, line.c_str(), line.size());
+        strncpy(cLine, line.c_str(), line.size());
         cLine[line.size()] = '\0';
         uint64_t clauseCounter = 0;
 
@@ -103,13 +103,13 @@ bool readCNFFile(std::string filename, clause_database &clauses, uint64_t &numva
             if (eagerMatch(cLine, "p cnf"))
             {
                 numvars = getInt(cLine);
-                std::cout << "c Number of variables: " << numvars << std::endl;
+                cout << "c Number of variables: " << numvars << endl;
                 numclauses = getInt(cLine);
-                std::cout << "c Number of clauses: " << numclauses << std::endl;
+                cout << "c Number of clauses: " << numclauses << endl;
             }
             else
             {
-                std::cout << "c Wrong header format!" << std::endl;
+                cout << "c Wrong header format!" << endl;
                 exit(1);
             }
             continue;
@@ -122,7 +122,8 @@ bool readCNFFile(std::string filename, clause_database &clauses, uint64_t &numva
             int64_t lit = getInt(cLine);
             if (lit == 0)
                 break;
-            if (lit < 0) neg = 1;
+            if (lit < 0)
+                neg = 1;
             uint64_t newLit = (abs(lit) << 1) | neg;
             bufferClause.push_back(newLit);
         }
@@ -169,9 +170,7 @@ bool updateWatchlist(watchlist_vec &watchlist,
     while (watchlist[false_literal].size() > 0)
     {
         pvec pclause = watchlist[false_literal].back();
-
         bool found_alt = false;
-
         for (uint64_t i = 0; i < pclause->size(); i++)
         {
             uint64_t real_var = pclause->at(i) >> 1;
@@ -189,7 +188,6 @@ bool updateWatchlist(watchlist_vec &watchlist,
         if (!found_alt)
             return false;
     }
-
     return true;
 }
 
@@ -251,12 +249,13 @@ bool solve(watchlist_vec &watchlist,
 
 void delete_pointers(clause_database &clauses)
 {
-    for (pvec clause : clauses) delete clause;
+    for (pvec clause : clauses)
+        delete clause;
 }
 
 int main(int argc, char **argv)
 {
-    std::cout << "c Starting" << std::endl;
+    cout << "c Starting" << endl;
 
     clause_database clauses;
     vec assignment;
@@ -267,7 +266,7 @@ int main(int argc, char **argv)
 
     if (clauses.size() != numclauses)
     {
-        std::cout << "c ERROR: Number of clauses do not match with number of clauses read!" << std::endl;
+        cout << "c ERROR: Number of clauses do not match with number of clauses read!" << endl;
         exit(1);
     }
 
@@ -275,23 +274,23 @@ int main(int argc, char **argv)
         assignment.push_back(2);
 
     watchlist_vec watchlist;
-    for (uint64_t w = 0; w < 2*numvars+1; w++)
+    for (uint64_t w = 0; w < 2 * numvars + 1; w++)
     {
-        watchlist.push_back(std::vector<pvec>());
+        watchlist.push_back(vector<pvec>());
     }
 
     setup_watchlist(numvars, watchlist, clauses);
-    
-    std::cout << "c Start solving" << std::endl;
+
+    cout << "c Start solving" << endl;
     if (solve(watchlist, assignment, 1))
     {
-        std::cout << "c SATISFIABLE" << std::endl;
+        cout << "c SATISFIABLE" << endl;
         delete_pointers(clauses);
         return 0;
     }
     else
     {
-        std::cout << "c UNSATISFIABLE" << std::endl;
+        cout << "c UNSATISFIABLE" << endl;
         delete_pointers(clauses);
         return 1;
     }
