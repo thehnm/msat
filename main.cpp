@@ -4,6 +4,12 @@
 
 #include "utilities.h"
 
+const uint8_t FALSE = 0;
+const uint8_t TRUE = 1;
+const uint8_t UNASSIGNED = 2;
+
+const uint8_t BOOLEAN_VALUES[2] = {FALSE, TRUE};
+
 /**
  * @brief Set the up watchlist object
  * 
@@ -14,12 +20,12 @@
  * @return false 
  */
 bool setup_watchlist(uint64_t numvars,
-                     watchlist_vec &watchlist,
+                     watchlist &wl,
                      clause_database &clauses)
 {
-    for (pvec clause : clauses)
+    for (pclause clause : clauses)
     {
-        watchlist[clause->at(0)].push_back(clause);
+        wl[clause->at(0)].push_back(clause);
     }
     return true;
 }
@@ -33,28 +39,28 @@ bool setup_watchlist(uint64_t numvars,
  * @return true 
  * @return false 
  */
-bool updateWatchlist(watchlist_vec &watchlist,
+bool updateWatchlist(watchlist &wl,
                      uint64_t false_literal,
-                     vec &assignment)
+                     clause &assignment)
 {
-    while (watchlist[false_literal].size() > 0)
+    while (wl[false_literal].size() > 0)
     {
-        pvec pclause = watchlist[false_literal].back();
+        pclause pclause = wl[false_literal].back();
         bool found_alt = false;
         for (uint64_t i = 0; i < pclause->size(); i++)
         {
-            uint64_t real_var = pclause->at(i) >> 1;
-            uint16_t odd = pclause->at(i) & 1;
+            uint8_t alt_lit = pclause->at(i);
+            uint64_t alt_var = alt_lit >> 1;
+            uint16_t odd = alt_lit & 1;
 
-            if (assignment[real_var] == 2 || assignment[real_var] == (odd ^ 1))
+            if (assignment[alt_var] == UNASSIGNED || assignment[alt_var] == (odd ^ 1))
             {
                 found_alt = true;
-                watchlist[false_literal].pop_back();
-                watchlist[pclause->at(1)].push_back(pclause);
+                wl[false_literal].pop_back();
+                wl[alt_lit].push_back(pclause);
                 break;
             }
         }
-
         if (!found_alt)
             return false;
     }
@@ -70,8 +76,8 @@ bool updateWatchlist(watchlist_vec &watchlist,
  * @return true 
  * @return false 
  */
-bool solve(watchlist_vec &watchlist,
-           vec &assignment,
+bool solve(watchlist &wl,
+           clause &assignment,
            uint64_t d)
 {
     uint64_t n = assignment.size();
@@ -91,9 +97,9 @@ bool solve(watchlist_vec &watchlist,
                 tried = true;
                 state[d] = (state[d] | 1) << a;
                 assignment[d] = a;
-                if (!updateWatchlist(watchlist, (d << 1) | a, assignment))
+                if (!updateWatchlist(wl, (d << 1) | a, assignment))
                 {
-                    assignment[d] = 2;
+                    assignment[d] = UNASSIGNED;
                 }
                 else
                 {
@@ -110,7 +116,7 @@ bool solve(watchlist_vec &watchlist,
             else
             {
                 state[d] = 0;
-                assignment[d] = 2;
+                assignment[d] = UNASSIGNED;
                 d--;
             }
         }
@@ -119,7 +125,7 @@ bool solve(watchlist_vec &watchlist,
 
 void delete_pointers(clause_database &clauses)
 {
-    for (pvec clause : clauses)
+    for (pclause clause : clauses)
         delete clause;
 }
 
@@ -128,7 +134,6 @@ int main(int argc, char **argv)
     cout << "c Starting" << endl;
 
     clause_database clauses;
-    vec assignment;
     uint64_t numvars;
     uint64_t numclauses;
 
@@ -140,19 +145,14 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    for (uint64_t i = 0; i < numvars + 1; i++)
-        assignment.push_back(2);
+    clause assignment(numvars, UNASSIGNED);
 
-    watchlist_vec watchlist;
-    for (uint64_t w = 0; w < 2 * numvars + 1; w++)
-    {
-        watchlist.push_back(vector<pvec>());
-    }
+    watchlist wl(2 * numvars + 1, vector<pclause>());
 
-    setup_watchlist(numvars, watchlist, clauses);
+    setup_watchlist(numvars, wl, clauses);
 
     cout << "c Start solving" << endl;
-    if (solve(watchlist, assignment, 1))
+    if (solve(wl, assignment, 1))
     {
         cout << "c SATISFIABLE" << endl;
         delete_pointers(clauses);

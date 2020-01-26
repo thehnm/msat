@@ -6,12 +6,10 @@
 
 using namespace std;
 
-typedef vector<uint64_t> *pvec;
-typedef vector<uint64_t> vec;
-typedef vector<pvec> clause_database;
-typedef vector<vector<pvec>> watchlist_vec;
-
-const uint8_t BOOLEAN_VALUES[2] = {0, 1};
+typedef vector<uint64_t> *pclause;
+typedef vector<uint64_t> clause;
+typedef vector<pclause> clause_database;
+typedef vector<vector<pclause>> watchlist;
 
 /**
  * @brief 
@@ -122,7 +120,7 @@ bool readCNFFile(string filename, clause_database &clauses, uint64_t &numvars, u
             bufferClause.push_back(newLit);
         }
 
-        clauses.push_back(new vec(bufferClause));
+        clauses.push_back(new clause(bufferClause));
         bufferClause.clear();
     }
     return 0;
