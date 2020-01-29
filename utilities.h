@@ -6,9 +6,21 @@
 
 using namespace std;
 
-typedef vector<uint64_t> *pclause;
-typedef vector<uint64_t> clause;
-typedef vector<pclause> clause_database;
+typedef struct Clause
+{
+    Clause(vector<uint64_t> l, bool s) : literals(l), satisfied(s) {}
+    vector<uint64_t> literals;
+    bool satisfied;
+} clause, *pclause;
+
+typedef struct ClauseDatabase
+{
+    ClauseDatabase(uint64_t i) : numclauses(i) {}
+    vector<pclause> clauses;
+    uint64_t numclauses;
+    bool satisfied;
+} clause_database;
+
 typedef vector<vector<pclause>> watchlist;
 
 /**
@@ -69,12 +81,12 @@ static int64_t getInt(char *&line)
  * @return true 
  * @return false 
  */
-bool readCNFFile(string filename, clause_database &clauses, uint64_t &numvars, uint64_t &numclauses)
+bool readCNFFile(string filename, clause_database &database, uint64_t &numvars, uint64_t &numclauses)
 {
     string line;
     ifstream myfile;
     myfile.open(filename);
-    vector<uint64_t> bufferClause;
+    vector<uint64_t> buffer;
 
     int64_t numberOfClauses;
     int64_t numberOfVariables;
@@ -116,12 +128,12 @@ bool readCNFFile(string filename, clause_database &clauses, uint64_t &numvars, u
                 break;
             if (lit < 0)
                 neg = 1;
-            uint64_t newLit = (abs(lit) << 1) | neg;
-            bufferClause.push_back(newLit);
+            buffer.push_back((abs(lit) << 1) | neg);
         }
 
-        clauses.push_back(new clause(bufferClause));
-        bufferClause.clear();
+        database.clauses.push_back(new clause(buffer, false));
+        database.numclauses = database.numclauses + 1;
+        buffer.clear();
     }
     return 0;
 }
