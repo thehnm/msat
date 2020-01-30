@@ -4,6 +4,9 @@
 
 #include "utilities.h"
 
+typedef uint64_t literal;
+typedef uint64_t variable;
+
 const uint8_t FALSE = 0;
 const uint8_t TRUE = 1;
 const uint8_t UNASSIGNED = 2;
@@ -30,6 +33,12 @@ bool setup_watchlist(uint64_t numvars,
     return true;
 }
 
+void setClauseSat(watchlist &wl, uint64_t true_literal, bool boolean_value)
+{
+    for (pclause p : wl[true_literal])
+        p->satisfied = boolean_value;
+}
+
 /**
  * @brief 
  * 
@@ -40,20 +49,18 @@ bool setup_watchlist(uint64_t numvars,
  * @return false 
  */
 bool updateWatchlist(watchlist &wl,
-                     uint64_t false_literal,
-                     vector<uint64_t> &assignment)
+                     literal false_literal,
+                     vector<variable> &assignment)
 {
-    while (wl[false_literal].size() > 0)
+    while (!wl[false_literal].empty())
     {
         pclause pc = wl[false_literal].back();
         bool found_alt = false;
-        for (uint64_t i = 0; i < pc->literals.size(); i++)
+        for (literal alt_lit : pc->literals)
         {
-            uint8_t alt_lit = pc->literals.at(i);
-            uint64_t alt_var = alt_lit >> 1;
-            uint16_t odd = alt_lit & 1;
-
-            if (assignment[alt_var] == UNASSIGNED || assignment[alt_var] == (odd ^ 1))
+            variable alt_var = alt_lit >> 1;
+            uint64_t odd = alt_lit & 1;
+            if (assignment[alt_var] == UNASSIGNED || assignment[alt_var] == odd ^ 1)
             {
                 found_alt = true;
                 wl[false_literal].pop_back();
@@ -62,7 +69,9 @@ bool updateWatchlist(watchlist &wl,
             }
         }
         if (!found_alt)
+        {
             return false;
+        }
     }
     return true;
 }
@@ -77,49 +86,60 @@ bool updateWatchlist(watchlist &wl,
  * @return false 
  */
 bool solve(watchlist &wl,
-           vector<uint64_t> &assignment,
+           vector<variable> &assignment,
            uint64_t d)
 {
     uint64_t n = assignment.size();
-    uint64_t state[n];
+    variable state[n];
     for (int i = 0; i < n; i++)
         state[i] = 0;
 
     while (1)
     {
-        if (d == n)
-            return true;
-        bool tried = false;
-        for (uint8_t a : BOOLEAN_VALUES)
+        cout << d << state[d] << endl;
+        if (d == (n-1))
         {
-            if (((state[d] >> a) & 1) == 0)
+            cout << "v ";
+            for (uint64_t i = 1; i < n; ++i)
             {
-                tried = true;
-                state[d] = (state[d] | 1) << a;
-                assignment[d] = a;
-                if (!updateWatchlist(wl, (d << 1) | a, assignment))
-                {
-                    assignment[d] = UNASSIGNED;
-                }
+                if (assignment[i])
+                    cout << i << " ";
                 else
-                {
-                    d++;
-                    break;
-                }
+                    cout << "-" << i << " ";
             }
+            cout << endl;
+            return true;
         }
+        if (d == 0)
+            return false;
 
-        if (!tried)
+        switch (state[d])
         {
-            if (d == 0)
-                return false;
-            else
-            {
-                state[d] = 0;
-                assignment[d] = UNASSIGNED;
-                d--;
-            }
+        case 0:
+        {
+            state[d] = 1;
+            assignment[d] = FALSE;
         }
+        break;
+        case 1:
+        {
+            state[d] = 2;
+            assignment[d] = TRUE;
+        }
+        break;
+        case 2:
+        {
+            assignment[d] = UNASSIGNED;
+            state[d] = 0;
+            --d;
+        }
+            continue;
+            break;
+        }
+        bool res = updateWatchlist(wl, (d << 1) | (assignment[d]), assignment);
+        if (res)
+            ++d;
+        continue;
     }
 }
 
@@ -145,9 +165,9 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    vector<uint64_t> assignment(numvars, UNASSIGNED);
+    vector<variable> assignment(numvars + 1, UNASSIGNED);
 
-    watchlist wl(2 * numvars + 1, vector<pclause>());
+    watchlist wl(2 * (numvars + 1), vector<pclause>());
 
     setup_watchlist(numvars, wl, database);
 

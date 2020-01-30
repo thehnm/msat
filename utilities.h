@@ -6,10 +6,16 @@
 
 using namespace std;
 
+typedef struct Literal
+{
+    uint64_t literal;
+} lit, *plit;
+
 typedef struct Clause
 {
-    Clause(vector<uint64_t> l, bool s) : literals(l), satisfied(s) {}
+    Clause(vector<uint64_t> l, bool s) : literals(l), satisfied(s), size(l.size()) {}
     vector<uint64_t> literals;
+    uint64_t size = 0;
     bool satisfied;
 } clause, *pclause;
 
