@@ -1,3 +1,6 @@
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -5,6 +8,14 @@
 #include <vector>
 
 using namespace std;
+
+const uint8_t FALSE = 0;
+const uint8_t TRUE = 1;
+const uint8_t UNASSIGNED = 2;
+const uint8_t BOOLEAN_VALUES[2] = {FALSE, TRUE};
+
+typedef uint64_t literal;
+typedef uint64_t variable;
 
 typedef struct Literal
 {
@@ -143,3 +154,5 @@ bool readCNFFile(string filename, clause_database &database, uint64_t &numvars, 
     }
     return 0;
 }
+
+#endif /*UTILS_H*/

@@ -2,16 +2,7 @@
  * Main idea used from https://sahandsaba.com/understanding-sat-by-implementing-a-simple-sat-solver-in-python.html
  */
 
-#include "utilities.h"
-
-typedef uint64_t literal;
-typedef uint64_t variable;
-
-const uint8_t FALSE = 0;
-const uint8_t TRUE = 1;
-const uint8_t UNASSIGNED = 2;
-
-const uint8_t BOOLEAN_VALUES[2] = {FALSE, TRUE};
+#include "utils.h"
 
 /**
  * @brief Set the up watchlist object
@@ -31,12 +22,6 @@ bool setup_watchlist(uint64_t numvars,
         wl[clause->literals.at(0)].push_back(clause);
     }
     return true;
-}
-
-void setClauseSat(watchlist &wl, uint64_t true_literal, bool boolean_value)
-{
-    for (pclause p : wl[true_literal])
-        p->satisfied = boolean_value;
 }
 
 /**
@@ -96,20 +81,8 @@ bool solve(watchlist &wl,
 
     while (1)
     {
-        cout << d << state[d] << endl;
-        if (d == (n-1))
-        {
-            cout << "v ";
-            for (uint64_t i = 1; i < n; ++i)
-            {
-                if (assignment[i])
-                    cout << i << " ";
-                else
-                    cout << "-" << i << " ";
-            }
-            cout << endl;
+        if (d == n)
             return true;
-        }
         if (d == 0)
             return false;
 
@@ -149,6 +122,19 @@ void delete_pointers(clause_database &database)
         delete clause;
 }
 
+void print_assignment(vector<uint64_t> assignment)
+{
+    cout << "v ";
+    for (uint64_t i = 1; i < assignment.size(); ++i)
+    {
+        if (assignment[i])
+            cout << i << " ";
+        else
+            cout << "-" << i << " ";
+    }
+    cout << "0" << endl;
+}
+
 int main(int argc, char **argv)
 {
     cout << "c Starting" << endl;
@@ -175,6 +161,7 @@ int main(int argc, char **argv)
     if (solve(wl, assignment, 1))
     {
         cout << "c SATISFIABLE" << endl;
+        print_assignment(assignment);
         delete_pointers(database);
         return 0;
     }
